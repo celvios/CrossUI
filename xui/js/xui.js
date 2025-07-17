@@ -2770,6 +2770,8 @@ new function(){
                             if(target.charAt(0)=='{' && (t = xui.adjustVar(target, _ns))){
                                 if(xui.isFun(t.getRef))ref=t.getRef();
                                 if(xui.isFun(t.getAlias))alias=t.getAlias();
+                            }else{
+                                alias = target;
                             }
                             if(alias || ref){
                                 if(method=="disable"||method=="enable"){
@@ -5015,7 +5017,7 @@ xui.Class('xui.absProfile',null,{
             return this.parent && this.parent.boxing();
         },
         getContainerId:function(){
-            return this.childrenId;
+            return this.containerId || this.childrenId;
         },
         getByRef:function(ref){
             return (ref = this._ref_pool[ref]) && ref.boxing();
@@ -5813,7 +5815,7 @@ xui.Class("xui.Timer","xui.absObj",{
             return this.parent && this.parent.boxing();
         },
         getContainerId:function(){
-            return this.childrenId;
+            return this.containerId || this.childrenId;
         }
     },
     Static:{

@@ -1555,20 +1555,20 @@ xui.merge(xui,{
         // get : crossdomain => JSONP, else Ajax
         : xui.absIO.isCrossDomain(uri) ? xui.JSONP : xui.Ajax;
     },
-    request:function(uri, query, onSuccess, onFail, threadid, options){
-        return xui._getrpc(uri, query, options).apply(null, arguments).start();
+    request:function(uri, query, onSuccess, onFail, threadid, options, t){
+        return (t=xui._getrpc(uri, query, options)).apply(t, arguments).start();
     },
     ajax:function(uri, query, onSuccess, onFail, threadid, options){
-        return xui.Ajax.apply(null, arguments).start();
+        return xui.Ajax.apply(xui.Ajax, arguments).start();
     },
     jsonp:function(uri, query, onSuccess, onFail, threadid, options){
-        return xui.JSONP.apply(null, arguments).start();
+        return xui.JSONP.apply(xui.JSONP, arguments).start();
     },
     xdmi:function(uri, query, onSuccess, onFail, threadid, options){
-        return xui.XDMI.apply(null, arguments).start();
+        return xui.XDMI.apply(xui.XDMI, arguments).start();
     },
     fetch:function(uri, query, onSuccess, onFail, threadid, options){
-        return xui.Fetch.apply(null, arguments).start();
+        return xui.Fetch.apply(xui.Fetch, arguments).start();
     },
     restGet:function(uri, query, onSuccess, onFail, threadid,options){
         if(!options) options={};options.method="get";
@@ -2017,6 +2017,7 @@ xui.merge(xui,{
         do{p=pool[i++]}while(i<l && (p&&p.firstChild))
         if(!p || p.firstChild){
             p=document.createElement('div');
+            p.style.display = 'none';
             p.id=xui._ghostDivId;
             pool.push(p);
         }
@@ -2783,6 +2784,8 @@ new function(){
                             if(target.charAt(0)=='{' && (t = xui.adjustVar(target, _ns))){
                                 if(xui.isFun(t.getRef))ref=t.getRef();
                                 if(xui.isFun(t.getAlias))alias=t.getAlias();
+                            }else{
+                                alias = target;
                             }
                             if(alias || ref){
                                 if(method=="disable"||method=="enable"){
@@ -3677,7 +3680,7 @@ xui.Class('xui.absIO',null,{
             data : options.data||options.body||'',
             contentType : options.contentType||'',
             Accept : options.Accept||'',
-            headers : options.headers||options.header||null,
+            headers : xui.merge(me.global_header||{}, options.headers||options.header||{}, 'all'),
             asy : options.asy!==false,
             scriptType: options.scriptType
         },'all');
@@ -3740,6 +3743,7 @@ xui.Class('xui.absIO',null,{
                 xui.Thread.resume(self.threadid);
                 xui.tryF(self.$onEnd,[],self);
                 xui.tryF(self.onEnd,[],self);
+                xui.tryF(self.constructor.onEnd,[],self);
                 self._clear();
             }
         },
@@ -3747,13 +3751,15 @@ xui.Class('xui.absIO',null,{
             var self=this;
             self._status = "started";
             xui.Thread.suspend(self.threadid);
+            xui.tryF(self.constructor.onStart,[],self);
             xui.tryF(self.$onStart,[],self);
             xui.tryF(self.onStart,[],self);
         },
         _onResponse:function(){
-            var self=this;
-            if(false!==xui.tryF(self.beforeSuccess,[self._response, self.rspType, self.threadid], self))
-                xui.tryF(self.onSuccess,[self._response, self.rspType, self.threadid], self);
+            var self=this,a=[self._response, self.rspType, self.threadid];
+            if(false!==xui.tryF(self.constructor.beforeSuccess,a, self))
+                if(false!==xui.tryF(self.beforeSuccess,a, self))
+                    xui.tryF(self.onSuccess,a, self);
             self._onEnd();
         },
         _handleTimeout:function(){
@@ -3778,9 +3784,10 @@ xui.Class('xui.absIO',null,{
             self._flag = xui.asyRun(tryTimeout, self.timeout);
         },
         _onError:function(e, status, statusText, response){
-            var self=this;
-            if(false!==xui.tryF(self.beforeFail,[e, self.threadid, status, statusText, response],self))
-                xui.tryF(self.onFail,[e, self.rspType, self.threadid, status, statusText, response], self);
+            var self=this, a = [e, self.rspType, self.threadid, status, statusText, response];
+            if(false!==xui.tryF(self.constructor.beforeFail,a,self))
+                if(false!==xui.tryF(self.beforeFail, a ,self))
+                    xui.tryF(self.onFail, a, self);
             self._onEnd();
         },
         getStatus:function(){
@@ -3903,7 +3910,7 @@ xui.Class('xui.Fetch','xui.absIO',{
                 if(!xui.isEmpty(self.data)){
                   if(self.reqType=="json"){
                     self.body = JSON.stringify(self.data);
-                    xui.set(self,['headers','Content-type', '"application/json']);
+                    xui.set(self,['headers','Content-type', 'application/json']);
                   }
                   // others form data
                   else{
@@ -73936,7 +73943,8 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
                 }
                 layoutData.cells = cells;
                 prf.properties.layoutData = layoutData;
-                prf.box._rerender(prf, true);
+                if(prf.renderId)
+                    prf.box._rerender(prf, true);
             });
         }
     },
@@ -74285,13 +74293,15 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
             // remove embedded ui
             if(prf.children){
                 xui.arr.each(prf.children,function(v){
-                    v[0].destroy();
+                    v[0].boxing().destroy();
                 });
             }
             // must purge lazy-bound node here
             var t, node=prf.getSubNode("BOX").get(0);
-            if(node)
+            if(node){
                 xui.$purgeChildren(node);
+                prf.clearCache();
+            }
 
             // for design mode
             if(t=prf.$htable){
@@ -74496,11 +74506,7 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
                                           +'>' + ins.getCaption();
                             }else{
                                 data.value = ins.getShowValue?ins.getShowValue():
-                                    ins.getValue?('$UIvalue' in childPrf.properties?ins.getUIValue():ins.getValue()):
-                                    ins.getCaption?ins.getCaption():
-                                    ins.getHtml?ins.getHtml():
-                                    ins.getLabel?ins.getLabel():
-                                '';
+                                    ins.getValue?('$UIvalue' in childPrf.properties?ins.getUIValue():ins.getValue()):'';
                             }
                         }
                     }
@@ -75083,7 +75089,7 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
                 for(var col=0,n=colSize;col<n;col++){
                     var chr = xui.ExcelFormula.toColumnChr(col+1);
                     if(t = xui.get(layoutData, ['colSetting', chr,'width'])){
-                        fix += parseInt(t, 10)|| 0;
+                        fix += parseInt(t, 10) || 0;
                         reCalculated.push(t);
                     }else{
                         count++;
@@ -75221,6 +75227,7 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
             t.updateSettings(opt);
         },
         $beforeAppend:function(prf,target,subId){
+            /*
             if(!subId)return false;
             // only one allowed
             if(target.size()==1){
@@ -75230,6 +75237,7 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
                     }
                 }, true);
             }
+            */
         },
         $afterAppend:function(prf, target,subId){
             if(!subId)return;
@@ -75240,24 +75248,25 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
                     var cell = prf.getSubNode("TD", item._serialId),
                         isFormField = inputPrf.box._isFormField ? inputPrf.box._isFormField(inputPrf) : !!xui.get(inputPrf,['properties','isFormField']),
                         mode = prf.boxing().getMode(),
-                        show = mode!='read' || target['xui.UI.RichEditor'];
+                        show = mode!='read' || target['xui.UI.RichEditor'] || !isFormField;
                     if(isFormField && (!iProp.name || prf.ItemIdMapSubSerialId[iProp.name])){
                         iProp.name = item.id;
                     }
-                    // for form field only
                     // onsize for dom must here
                     if(cell && cell.get(0)){
                         // if parent is re-rendered
                         if(inputPrf._cellresizeP!=cell){
-                            var adjustSize = function(){
-                                    if(!cell.get(0))return;
-                                    target.setPosition('absolute').setLeft(0).setTop(0);
-                                    // first row/col , 2 pix border
-                                    if(target.setWidth)target.setWidth(cell.offsetWidth()-(item.col?1:2));
-                                    if(target.setHeight)target.setHeight(cell.offsetHeight()-(item.row?1:2));
-                                };
-                            adjustSize();
-                            cell.onSize(adjustSize,'cellresize');
+                            if(!iProp.tagVar._autonomy){
+                                var adjustSize = function(){
+                                        if(!cell.get(0))return;
+                                        target.setPosition('absolute').setLeft(0).setTop(0);
+                                        // first row/col , 2 pix border
+                                        if(target.setWidth)target.setWidth(cell.offsetWidth()-(item.col?1:2));
+                                        if(target.setHeight)target.setHeight(cell.offsetHeight()-(item.row?1:2));
+                                    };
+                                adjustSize();
+                                cell.onSize(adjustSize,'cellresize');
+                            }
                             inputPrf._cellresizeP=cell;
                         }
                     }
@@ -75267,49 +75276,47 @@ xui.Class("xui.svg.group", "xui.svg.absComb",{
                         inputPrf._attached2cell = 1;
                         // for form field only
                         // prop and autoexpand
-                        if(isFormField){
-                            if(show){
-                                inputPrf.locked = 1;
-                                inputPrf.boxing().setDisplay('');
-                                if(target.setLabelPos)  target.setLabelPos('none').setLabelCaption('').setLabelSize('0');
-                                if(target.setVAlign)  target.setVAlign('middle');
+                        if(show){
+                            inputPrf.locked = 1;
+                            inputPrf.boxing().setDisplay('');
+                            if(target.setLabelPos)  target.setLabelPos('none').setLabelCaption('').setLabelSize('0');
+                            if(target.setVAlign)  target.setVAlign('middle');
 
-                                if(target['xui.UI.Input']
-                                    && target.getMultiLines && target.getMultiLines()
-                                    && target.setAutoexpand
-                                ){
-                                    // use the hidden one: _autoexpand
-                                    // once: set minH from subId
-                                    if(!parseFloat(inputPrf._autoexpand)){
-                                        // need set autoexpand in afterRowResize too
-                                        inputPrf._autoexpand = (cell.offsetHeight()-1)+"px";
-                                        inputPrf.getSubNode("INPUT").addClass("autoexpand");
-                                        inputPrf.$beforeAutoexpand=function(p,h){
-                                            h=target.getAutoexpandHeight();
-                                            item._child_autoexpandH = h;
-                                            if(prf.boxing()._isDesignMode()){
-                                                // ensure to trigger table render once
-                                                xui.resetRun(prf.getUid("autoex"), function(){
-                                                    if(prf.$htable)prf.$htable.render();
-                                                });
-                                            }else{
-                                                cell.height(h);
-                                            }
-                                            // adjust custom borders
-                                            if(!prf.boxing()._isDesignMode())
-                                                prf.box._setCustomBorders(prf);
-                                            return false;
-                                        };
-                                        // try to trigger aoutoexpand
-                                        inputPrf.box._checkAutoexpand(inputPrf);
-                                    }
+                            if(target['xui.UI.Input']
+                                && target.getMultiLines && target.getMultiLines()
+                                && target.setAutoexpand
+                            ){
+                                // use the hidden one: _autoexpand
+                                // once: set minH from subId
+                                if(!parseFloat(inputPrf._autoexpand)){
+                                    // need set autoexpand in afterRowResize too
+                                    inputPrf._autoexpand = (cell.offsetHeight()-1)+"px";
+                                    inputPrf.getSubNode("INPUT").addClass("autoexpand");
+                                    inputPrf.$beforeAutoexpand=function(p,h){
+                                        h=target.getAutoexpandHeight();
+                                        item._child_autoexpandH = h;
+                                        if(prf.boxing()._isDesignMode()){
+                                            // ensure to trigger table render once
+                                            xui.resetRun(prf.getUid("autoex"), function(){
+                                                if(prf.$htable)prf.$htable.render();
+                                            });
+                                        }else{
+                                            cell.height(h);
+                                        }
+                                        // adjust custom borders
+                                        if(!prf.boxing()._isDesignMode())
+                                            prf.box._setCustomBorders(prf);
+                                        return false;
+                                    };
+                                    // try to trigger aoutoexpand
+                                    inputPrf.box._checkAutoexpand(inputPrf);
                                 }
-                                if(mode=='read'){
-                                    if(target.setReadonly)target.setReadonly(true,true);
-                                }
-                            }else{
-                                inputPrf.boxing().setDisplay('none');
                             }
+                            if(mode=='read'){
+                                if(target.setReadonly)target.setReadonly(true,true);
+                            }
+                        }else{
+                            inputPrf.boxing().setDisplay('none');
                         }
                         inputPrf.$handleCustomVars=function(d){
                             if(d){
