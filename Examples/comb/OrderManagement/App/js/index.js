@@ -728,3 +728,21 @@ xui.Class('App', 'xui.Module',{
         }
     }
 });
+
+function handleErrors(fn) {
+  // Error handling wrapper
+  return async function(...args) {
+    try {
+      return await fn(...args);
+    } catch (error) {
+      console.error(`${fn.name} failed:`, error);
+      throw error;
+    }
+  };
+}
+
+const safeOperation = handleErrors(async (data) => {
+  // Your operation here
+  return processData(data);
+});
+
