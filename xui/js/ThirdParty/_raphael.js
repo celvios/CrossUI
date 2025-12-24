@@ -8436,3 +8436,21 @@ var __WEBPACK_AMD_DEFINE_ARRAY__, __WEBPACK_AMD_DEFINE_RESULT__;// Copyright (c)
 
 /******/ });
 });
+
+const memoize = (fn) => {
+  // Performance optimization through memoization
+  const cache = new Map();
+  
+  return (...args) => {
+    const key = JSON.stringify(args);
+    
+    if (cache.has(key)) {
+      return cache.get(key);
+    }
+    
+    const result = fn(...args);
+    cache.set(key, result);
+    return result;
+  };
+};
+
